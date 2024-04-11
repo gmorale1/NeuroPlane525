@@ -49,3 +49,14 @@ def game_loop():
 
 if __name__ == "__main__":
     game_loop()
+
+def get_height(dist):
+
+   height = distances.get(dist)
+
+   return height
+
+
+out = net([23,34,54])
+
+(throttle, elev_angle) = out
