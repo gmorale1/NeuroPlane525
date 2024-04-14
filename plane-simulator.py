@@ -19,7 +19,7 @@ ground_heights = []
 number_of_points = 100  # You can adjust this for more or less detail in the ground
 
 class Airplane:
-    def __init__(self, altitude, speed, accel=7.2, drag_coeff=0.02, mass=1110):
+    def __init__(self, altitude, speed, accel=7.2, drag_coeff=0.02, mass=1110, lift_coeff = 0.5):
         self.altitude = altitude
         self.speed = speed  # This will now represent the horizontal speed
         self.vertical_speed = 0
@@ -29,7 +29,7 @@ class Airplane:
         self.drag_c = drag_coeff
         self.mass = mass
         self.gravity = 9.81  # m/s^2, downward force
-        self.lift_coefficient = 0.5  # Placeholder value for lift coefficient
+        self.lift_coefficient = lift_coeff
 
     def update(self, timediff, throttle, elevator_angle):
         self.controls(throttle, elevator_angle)
@@ -103,14 +103,3 @@ def game_loop():
 
 if __name__ == "__main__":
     game_loop()
-
-# def get_height(dist):
-
-#    height = distances.get(dist)
-
-#    return height
-
-
-# out = net([23,34,54])
-
-# (throttle, elev_angle) = out
