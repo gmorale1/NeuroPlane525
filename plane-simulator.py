@@ -41,7 +41,8 @@ class Airplane:
 
     def update(self, timediff):
         self.calculate_pitch(timediff)
-        self.calculate_speed(timediff)
+        # self.calculate_speed(timediff)
+        self.simple_speed(timediff)
         self.calculate_altitude(timediff)
 
     def calculate_pitch(self, timediff):
@@ -52,7 +53,6 @@ class Airplane:
             self.pitch_angle = self.pitch_angle % 360  # normalize angle for simplicity
 
     def calculate_speed(self, timediff):
-        timediff * 60
         # Calculate total engine force
         engine_force = self.accel * self.throttle
 
@@ -78,6 +78,26 @@ class Airplane:
         net_vertical_force = lift + vertical_thrust - self.mass * self.gravity
         vertical_acceleration = net_vertical_force / self.mass
         self.vertical_speed += vertical_acceleration * timediff
+
+    def simple_speed(self, timediff):
+        '''Uses simplified forces to be more understandable'''
+        #engine power
+        thrust = self.accel * self.throttle
+        horz_thrust = thrust * math.cos(math.radians(self.pitch_angle))
+        vert_thrust = - thrust * math.sin(math.radians(self.pitch_angle))
+
+        #wing lift and drag
+        vert_lift = 9.8 * math.cos(math.radians(self.pitch_angle)) #simple lift, when wing points flat to ground it is about as strong as gravity
+       
+        #drag to resist motion and non aerodynamic faces
+        drag_c = 1.2
+        horz_drag = drag_c * self.speed * math.sin(math.radians(self.pitch_angle)) * timediff
+        vert_drag = drag_c * self.vertical_speed * math.cos(math.radians(self.pitch_angle)) * timediff
+
+        #speeds
+        self.speed = self.speed + ( horz_thrust - horz_drag) * timediff                                     #horizontal
+        self.vertical_speed = self.vertical_speed + (vert_thrust - 9.8 + vert_lift - vert_drag) * timediff  #vertical
+
 
     def calculate_altitude(self, timediff):
         #NOTE: Pygame altitudes are switched
@@ -147,7 +167,7 @@ def main():
     ticks_per_sec = 60
     distance_traveled = 0
 
-    plane = Airplane(altitude=100, speed=65, pitch_angle=0)
+    plane = Airplane(altitude=100, speed=(65/ticks_per_meter), pitch_angle=1)
     airplane_x = 50 #draw locations
     collision = False
     debug = False
@@ -172,7 +192,7 @@ def main():
 
         ## Airplane
         plane.update(1/ticks_per_sec)
-        plane.controls(throttle=1,elevator_angle=0)
+        plane.controls(throttle=0.75,elevator_angle=4)
         
         d_dist = plane.speed
         # d_dist = 1  #plane speed
