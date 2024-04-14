@@ -144,6 +144,11 @@ def display_message(screen, text, color, x, y):
     text_surface = font.render(text, True, color)
     screen.blit(text_surface, (x, y))
 
+def optimal_height(ap_alt, ap_x,heights,optimal = 500):
+    #gives difference between optimal height and current flight height from the ground
+    avg_mt_height = sum(heights[ap_x:(ap_x+10)])/10
+    avg_ap_alt = math.fabs(ap_alt - avg_mt_height)
+    return math.fabs(optimal - avg_ap_alt)
 
 def main():
     pygame.init()
@@ -165,12 +170,18 @@ def main():
 
     ticks_per_meter = 60
     ticks_per_sec = 60
+    
+    # scoring
     distance_traveled = 0
-
-    plane = Airplane(altitude=100, speed=(65/ticks_per_meter), pitch_angle=1)
-    airplane_x = 50 #draw locations
     collision = False
     debug = False
+    score = 0
+    prev_speed = 65
+    prev_angle = -1
+    time = 0
+
+    plane = Airplane(altitude=100, speed=prev_speed, pitch_angle=prev_angle)
+    airplane_x = 50 #draw locations
 
     while not game_over:
         
@@ -192,7 +203,7 @@ def main():
 
         ## Airplane
         plane.update(1/ticks_per_sec)
-        plane.controls(throttle=0.75,elevator_angle=4)
+        plane.controls(throttle=0.4,elevator_angle=2)
         
         d_dist = plane.speed
         # d_dist = 1  #plane speed
@@ -201,13 +212,21 @@ def main():
         #can be used to measure distance
         
         if debug and tick % 60 == 0:
-            print("elevation: ", mountain_points[airplane_x])
+            print("elevation: ", mountain_points[airplane_x] - plane.altitude)
             print("distance travelled: ", round(distance_traveled))
             print("airplane height: ", HEIGHT + plane.altitude)
             print("airplane speed: ", plane.speed)
             print("airplane pitch: ", plane.pitch_angle)
-
+    
             print()
+
+        #score metrics
+        total_speed = math.sqrt(plane.speed ** 2 + plane.vertical_speed ** 2)
+        # penalize change in values, 
+        # priority to smooth flight, 
+        # give one point for not crashing
+        # give points for staying within the optimal height
+        score = score - math.sqrt(prev_speed**2 + total_speed**2) - math.sqrt(prev_angle**2 + plane.pitch_angle**2) + (d_dist / ticks_per_meter) + 1 - optimal_height(plane.altitude,airplane_x,mountain_points)
         distance_traveled = distance_traveled + d_dist / ticks_per_meter
         tick = (tick + 1) % 60
 
@@ -225,8 +244,9 @@ def main():
         # Draw mountains
         pygame.draw.polygon(screen, GREEN, [(0, HEIGHT), *zip(range(WIDTH), mountain_points), (WIDTH, HEIGHT)])        
 
-        if collision: display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
-            
+        if collision: 
+            display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
+            display_message(screen, f"Score: {round(score + distance_traveled,ndigits=2)}", WHITE, WIDTH // 2, 20)
 
         pygame.display.flip()
         clock.tick(tickspeed) #frame speed
