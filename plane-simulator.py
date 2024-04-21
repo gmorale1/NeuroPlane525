@@ -1,6 +1,17 @@
 import pygame
 import random
 import math
+import torch
+import torchvision as tv
+import torchvision.transforms as transforms
+from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms, utils
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+
+import numpy as np
+
 
 # Define some colors
 BLACK = (0, 0, 0)
@@ -150,6 +161,64 @@ def optimal_height(ap_alt, ap_x,heights,optimal = 500):
     avg_ap_alt = math.fabs(ap_alt - avg_mt_height)
     return math.fabs(optimal - avg_ap_alt)
 
+def plane_vectorize(plane, environment):
+    '''
+    Represents the airplane state as a vector of values
+    '''
+
+    return (
+        plane.altitude,
+        plane.throttle,
+        plane.speed,
+        plane.vertical_speed,
+        plane.pitch_angle,
+        plane.accel,
+        plane.elevator_angle,
+        plane.pitch_rate,
+        environment[0],
+        environment[1],
+        environment[2]
+    )
+
+
+class NetWithoutDropout(nn.Module):
+    def __init__(self,layer_dims):
+        '''
+        Builds a 4 layer deep network
+
+        args: 
+        layer_dims - list of nueron amounts at each layer
+
+        '''
+        super().__init__()
+        self.model_stack = nn.Sequential(
+            #4 layer network
+            nn.Linear(layer_dims[0],layer_dims[1]),
+            nn.ReLU(),
+            nn.Linear(layer_dims[1],layer_dims[2]),
+            nn.ReLU(),
+            nn.Linear(layer_dims[2],layer_dims[3]),
+            nn.ReLU(),
+            nn.Linear(layer_dims[3],layer_dims[4]),
+            nn.Sigmoid()
+        )
+
+    def forward(self,x):
+        y_hat = self.model_stack(x)
+        #layer prediction
+        return y_hat 
+    
+# Weight initialization
+def init_weights(m):
+    '''Glorot weights'''
+    if isinstance(m, nn.Linear):
+        # Calculate the bounds for Glorot initialization
+        bound = np.sqrt(6 / (m.weight.size(0) + m.weight.size(1)))
+        # Apply Glorot initialization to the weights
+        torch.nn.init.uniform_(m.weight, -bound, bound)
+        # Initialize biases to zeros
+        m.bias.data.fill_(0.00)
+
 def main():
     pygame.init()
     pygame.font.init()
@@ -159,10 +228,10 @@ def main():
     clock = pygame.time.Clock()
     #1 second = 60 ticks
     #1 meter = 60 points
-    tickspeed = 60  
+    tickspeed = 30  
 
     # Initialize amplitude values for each segment
-    amps = [65, 80, 20, 200, 130, 300]
+    amps = [65, 80, 20, 200, 130, 300, 40, 234, 100, 50, 78]
 
     game_over = False
     tick = 0    #tracks distances traveled in sets of 60
@@ -182,6 +251,17 @@ def main():
 
     plane = Airplane(altitude=100, speed=prev_speed, pitch_angle=prev_angle)
     airplane_x = 50 #draw locations
+
+    environment = (
+        mountain_points[0],
+        mountain_points[1],
+        mountain_points[2]
+        )
+    airplane_vec = plane_vectorize(plane,environment)
+
+    dims = [len(airplane_vec),51,25,15,2]
+    model = NetWithoutDropout(dims)
+    model.apply(init_weights)
 
     while not game_over:
         
@@ -203,8 +283,19 @@ def main():
 
         ## Airplane
         plane.update(1/ticks_per_sec)
-        plane.controls(throttle=0.4,elevator_angle=2)
+        environment = (
+            mountain_points[0],
+            mountain_points[1],
+            mountain_points[2]
+        )
+        airplane_vec = plane_vectorize(plane, environment)
+        #add three height points
         
+        output = model(torch.FloatTensor(airplane_vec))
+        # plane.controls(throttle=output[0],elevator_angle=output[1])
+        plane.controls(throttle=1,elevator_angle=-4)
+        
+
         d_dist = plane.speed
         # d_dist = 1  #plane speed
 
@@ -226,9 +317,26 @@ def main():
         # priority to smooth flight, 
         # give one point for not crashing
         # give points for staying within the optimal height
-        score = score - math.sqrt(prev_speed**2 + total_speed**2) - math.sqrt(prev_angle**2 + plane.pitch_angle**2) + (d_dist / ticks_per_meter) + 1 - optimal_height(plane.altitude,airplane_x,mountain_points)
+        oldscore = score
+        # score = score - math.sqrt(prev_speed**2 + total_speed**2) - math.sqrt(prev_angle**2 + plane.pitch_angle**2) + (d_dist / ticks_per_meter) + 1 - optimal_height(plane.altitude,airplane_x,mountain_points, optimal=100)
+        score = - math.sqrt(prev_speed**2 + total_speed**2) - math.sqrt(prev_angle**2 + plane.pitch_angle**2) + optimal_height(plane.altitude,airplane_x,mountain_points, optimal=100)
+
+        score_diff = oldscore - score
+        
+        #backpropagate
+        criterion = nn.BCELoss()
+        optimizer = optim.SGD(model.parameters(), lr=0.01)
+        
+
+
+        
+
+
         distance_traveled = distance_traveled + d_dist / ticks_per_meter
         tick = (tick + 1) % 60
+
+        if torch.is_tensor(d_dist):
+            d_dist = d_dist.item()
 
         ## collision 
         mountain_points = mountain_points[round(d_dist):] + mountain_points[:round(d_dist)]  # Remove leftmost point
@@ -245,6 +353,12 @@ def main():
         pygame.draw.polygon(screen, GREEN, [(0, HEIGHT), *zip(range(WIDTH), mountain_points), (WIDTH, HEIGHT)])        
 
         if collision: 
+
+            if torch.is_tensor(score):
+                score = score.item()
+            if torch.is_tensor(distance_traveled):
+                distance_traveled = distance_traveled.item()
+
             display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
             display_message(screen, f"Score: {round(score + distance_traveled,ndigits=2)}", WHITE, WIDTH // 2, 20)
 
