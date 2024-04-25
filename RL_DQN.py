@@ -8,11 +8,22 @@ import optim
 import copy
 import random
 
+import torch
+import torchvision as tv
+import torchvision.transforms as transforms
+from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms, utils
+import torch.nn as nn
+import torch.nn.functional as F
+import torch.optim as optim
+
+from plane_simulator import NetWithoutDropout
+
 class DQN:
     def __init__(self, args, env, inputs):
         self.env = env
         self.args = args 
-        self.net = NetWithoutdropout(self.args.num_params) 
+        self.net = NetWithoutDropout(self.args.num_params) 
         self.optimizer = optim.Adam(self.net.parameters()) # Rprop is the default for NFQ
         self.target_net = copy.deepcopy(self.net)
         self.count = 0

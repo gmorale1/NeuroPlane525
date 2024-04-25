@@ -12,6 +12,7 @@ import torch.optim as optim
 
 import numpy as np
 
+import RL_DQN
 
 # Define some colors
 BLACK = (0, 0, 0)
@@ -165,7 +166,7 @@ def plane_vectorize(plane, environment):
     '''
     Represents the airplane state as a vector of values
     '''
-
+    #looks like (1, 0, 0 ... 120)
     return (
         plane.altitude,
         plane.throttle,
@@ -259,9 +260,16 @@ def main():
         )
     airplane_vec = plane_vectorize(plane,environment)
 
+    #build dimensions and assign random weights
     dims = [len(airplane_vec),51,25,15,2]
-    model = NetWithoutDropout(dims)
-    model.apply(init_weights)
+    # model = NetWithoutDropout(dims)
+    # model.apply(init_weights)
+
+    #convert network into reinforcement learning network
+    args = {
+        'num_params': dims,
+    }
+    model = RL_DQN.DQN(dims)
 
     while not game_over:
         
@@ -274,6 +282,8 @@ def main():
         if collision: 
             display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
             clock.tick(tickspeed)
+
+            #TODO: Restart game/ start new DQN episode
             continue
 
         # Generate mountain points with smooth variation
@@ -290,8 +300,16 @@ def main():
         )
         airplane_vec = plane_vectorize(plane, environment)
         #add three height points
+
+        #network episode
+        if tick % 60 == 0:
+            model.train()
+
         
-        output = model(torch.FloatTensor(airplane_vec))
+        #pass input to network
+        output = model.net(airplane_vec)
+
+        # output = model(torch.FloatTensor(airplane_vec))
         # plane.controls(throttle=output[0],elevator_angle=output[1])
         plane.controls(throttle=1,elevator_angle=-4)
         
@@ -324,12 +342,8 @@ def main():
         score_diff = oldscore - score
         
         #backpropagate
-        criterion = nn.BCELoss()
-        optimizer = optim.SGD(model.parameters(), lr=0.01)
-        
-
-
-        
+        # criterion = nn.BCELoss()
+        # optimizer = optim.SGD(model.parameters(), lr=0.01)      
 
 
         distance_traveled = distance_traveled + d_dist / ticks_per_meter
