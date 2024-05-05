@@ -12,7 +12,9 @@ import torch.optim as optim
 
 import numpy as np
 
-import RL_DQN
+from DQN_agent import DQN_agent
+from RL import Plane_rl
+
 
 # Define some colors
 BLACK = (0, 0, 0)
@@ -117,16 +119,16 @@ class Airplane:
 
     def controls(self, throttle, elevator_angle):
         #throttle limits
-        if(throttle > 1):
+        if(throttle > 0.5):
             throttle = 1
-        elif( throttle < 0):
+        elif( throttle < 0.5):
             throttle = 0
         self.throttle = throttle
 
         #elevator flap limits
-        if(elevator_angle > 20):
+        if(elevator_angle > 0.5):
             elevator_angle = 20
-        elif( elevator_angle < -20):
+        elif( elevator_angle < 0.5):
             elevator_angle = -20
         self.elevator_angle = elevator_angle
 
@@ -182,43 +184,43 @@ def plane_vectorize(plane, environment):
     )
 
 
-class NetWithoutDropout(nn.Module):
-    def __init__(self,layer_dims):
-        '''
-        Builds a 4 layer deep network
+# class NetWithoutDropout(nn.Module):
+#     def __init__(self,layer_dims):
+#         '''
+#         Builds a 4 layer deep network
 
-        args: 
-        layer_dims - list of nueron amounts at each layer
+#         args: 
+#         layer_dims - list of nueron amounts at each layer
 
-        '''
-        super().__init__()
-        self.model_stack = nn.Sequential(
-            #4 layer network
-            nn.Linear(layer_dims[0],layer_dims[1]),
-            nn.ReLU(),
-            nn.Linear(layer_dims[1],layer_dims[2]),
-            nn.ReLU(),
-            nn.Linear(layer_dims[2],layer_dims[3]),
-            nn.ReLU(),
-            nn.Linear(layer_dims[3],layer_dims[4]),
-            nn.Sigmoid()
-        )
+#         '''
+#         super().__init__()
+#         self.model_stack = nn.Sequential(
+#             #4 layer network
+#             nn.Linear(layer_dims[0],layer_dims[1]),
+#             nn.ReLU(),
+#             nn.Linear(layer_dims[1],layer_dims[2]),
+#             nn.ReLU(),
+#             nn.Linear(layer_dims[2],layer_dims[3]),
+#             nn.ReLU(),
+#             nn.Linear(layer_dims[3],layer_dims[4]),
+#             nn.Sigmoid()
+#         )
 
-    def forward(self,x):
-        y_hat = self.model_stack(x)
-        #layer prediction
-        return y_hat 
+#     def forward(self,x):
+#         y_hat = self.model_stack(x)
+#         #layer prediction
+#         return y_hat 
     
-# Weight initialization
-def init_weights(m):
-    '''Glorot weights'''
-    if isinstance(m, nn.Linear):
-        # Calculate the bounds for Glorot initialization
-        bound = np.sqrt(6 / (m.weight.size(0) + m.weight.size(1)))
-        # Apply Glorot initialization to the weights
-        torch.nn.init.uniform_(m.weight, -bound, bound)
-        # Initialize biases to zeros
-        m.bias.data.fill_(0.00)
+# # Weight initialization
+# def init_weights(m):
+#     '''Glorot weights'''
+#     if isinstance(m, nn.Linear):
+#         # Calculate the bounds for Glorot initialization
+#         bound = np.sqrt(6 / (m.weight.size(0) + m.weight.size(1)))
+#         # Apply Glorot initialization to the weights
+#         torch.nn.init.uniform_(m.weight, -bound, bound)
+#         # Initialize biases to zeros
+#         m.bias.data.fill_(0.00)
 
 def main():
     pygame.init()
@@ -230,6 +232,7 @@ def main():
     #1 second = 60 ticks
     #1 meter = 60 points
     tickspeed = 30  
+    experiences = []
 
     # Initialize amplitude values for each segment
     amps = [65, 80, 20, 200, 130, 300, 40, 234, 100, 50, 78]
@@ -265,11 +268,10 @@ def main():
     # model = NetWithoutDropout(dims)
     # model.apply(init_weights)
 
-    #convert network into reinforcement learning network
-    args = {
-        'num_params': dims,
-    }
-    model = RL_DQN.DQN(dims)
+    # model = DQN_agent(dims)
+    # model.apply(model.init_weights)
+    plane_rl = Plane_rl(dims)
+    ep = 0
 
     while not game_over:
         
@@ -279,12 +281,10 @@ def main():
             if event.type == pygame.QUIT:
                 game_over = True
 
-        if collision: 
-            display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
-            clock.tick(tickspeed)
-
-            #TODO: Restart game/ start new DQN episode
-            continue
+        # if collision: 
+        #     display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
+        #     clock.tick(tickspeed)
+        #     continue
 
         # Generate mountain points with smooth variation
         # points = generate_mountain_points(amps)
@@ -298,20 +298,30 @@ def main():
             mountain_points[1],
             mountain_points[2]
         )
-        airplane_vec = plane_vectorize(plane, environment)
+        airplane_vec_cur = plane_vectorize(plane, environment)
         #add three height points
 
         #network episode
-        if tick % 60 == 0:
-            model.train()
+        # if tick % 60 == 0:
+        #     model.train()
 
         
-        #pass input to network
-        output = model.net(airplane_vec)
-
         # output = model(torch.FloatTensor(airplane_vec))
         # plane.controls(throttle=output[0],elevator_angle=output[1])
-        plane.controls(throttle=1,elevator_angle=-4)
+        output = plane_rl.get_action(ep, airplane_vec_cur)
+        # plane.controls(throttle=1,elevator_angle=-4) #need to work on this
+        plane.controls(output[0],output[1])
+
+        plane.update(1/ticks_per_sec)
+        environment = (
+            mountain_points[0],
+            mountain_points[1],
+            mountain_points[2]
+        )
+        airplane_vec_next = plane_vectorize(plane, environment)
+
+        # experiences.append((airplane_vec_cur, outputs, score, airplane_vec_next, failed))
+        # pattern_set = plane_rl.generate_pattern_set(experiences)
         
 
         d_dist = plane.speed
@@ -320,14 +330,19 @@ def main():
         #prints every 60 ticks, meaning one tick every second on a tickspeed of 60
         #can be used to measure distance
         
-        if debug and tick % 60 == 0:
+        if debug or (tick !=0 and tick % 20 == 0):
             print("elevation: ", mountain_points[airplane_x] - plane.altitude)
             print("distance travelled: ", round(distance_traveled))
             print("airplane height: ", HEIGHT + plane.altitude)
             print("airplane speed: ", plane.speed)
             print("airplane pitch: ", plane.pitch_angle)
+            print("Score: ", score)
     
-            print()
+            # print()
+            state_b, target_q_values = plane_rl.generate_pattern_set(experiences)
+            combined_data = list(zip(state_b, target_q_values))
+            loss = plane_rl.train(combined_data)
+            ep += 1
 
         #score metrics
         total_speed = math.sqrt(plane.speed ** 2 + plane.vertical_speed ** 2)
@@ -335,15 +350,19 @@ def main():
         # priority to smooth flight, 
         # give one point for not crashing
         # give points for staying within the optimal height
-        oldscore = score
+        # oldscore = score
         # score = score - math.sqrt(prev_speed**2 + total_speed**2) - math.sqrt(prev_angle**2 + plane.pitch_angle**2) + (d_dist / ticks_per_meter) + 1 - optimal_height(plane.altitude,airplane_x,mountain_points, optimal=100)
         score = - math.sqrt(prev_speed**2 + total_speed**2) - math.sqrt(prev_angle**2 + plane.pitch_angle**2) + optimal_height(plane.altitude,airplane_x,mountain_points, optimal=100)
 
-        score_diff = oldscore - score
+        # score_diff = oldscore - score
         
         #backpropagate
         # criterion = nn.BCELoss()
-        # optimizer = optim.SGD(model.parameters(), lr=0.01)      
+        # optimizer = optim.SGD(model.parameters(), lr=0.01)
+    
+
+
+        
 
 
         distance_traveled = distance_traveled + d_dist / ticks_per_meter
@@ -364,7 +383,8 @@ def main():
         plane.draw_airplane(screen=screen,x=airplane_x)
         
         # Draw mountains
-        pygame.draw.polygon(screen, GREEN, [(0, HEIGHT), *zip(range(WIDTH), mountain_points), (WIDTH, HEIGHT)])        
+        pygame.draw.polygon(screen, GREEN, [(0, HEIGHT), *zip(range(WIDTH), mountain_points), (WIDTH, HEIGHT)])  
+        experiences.append((airplane_vec_cur, output, score, airplane_vec_next, collision))      
 
         if collision: 
 
@@ -373,8 +393,8 @@ def main():
             if torch.is_tensor(distance_traveled):
                 distance_traveled = distance_traveled.item()
 
-            display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
-            display_message(screen, f"Score: {round(score + distance_traveled,ndigits=2)}", WHITE, WIDTH // 2, 20)
+            # display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
+            # display_message(screen, f"Score: {round(score + distance_traveled,ndigits=2)}", WHITE, WIDTH // 2, 20)
 
         pygame.display.flip()
         clock.tick(tickspeed) #frame speed
