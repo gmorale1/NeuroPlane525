@@ -242,7 +242,7 @@ def main():
     mountain_points = generate_mountain_points(amps)
 
     ticks_per_meter = 60
-    ticks_per_sec = 60
+    ticks_per_sec = 45
     
     # scoring
     distance_traveled = 0
@@ -348,12 +348,13 @@ def main():
         total_speed = math.sqrt(plane.speed ** 2 + plane.vertical_speed ** 2)
         # penalize change in values, 
         # priority to smooth flight, 
-        # give one point for not crashing
         # give points for staying within the optimal height
         # oldscore = score
         # score = score - math.sqrt(prev_speed**2 + total_speed**2) - math.sqrt(prev_angle**2 + plane.pitch_angle**2) + (d_dist / ticks_per_meter) + 1 - optimal_height(plane.altitude,airplane_x,mountain_points, optimal=100)
-        score = - math.sqrt(prev_speed**2 + total_speed**2) - math.sqrt(prev_angle**2 + plane.pitch_angle**2) + optimal_height(plane.altitude,airplane_x,mountain_points, optimal=100)
-
+        d_speed = math.sqrt(prev_speed**2 + total_speed**2)
+        d_angle = math.sqrt(prev_angle**2 + plane.pitch_angle**2)
+        height_metric = optimal_height(plane.altitude,airplane_x,mountain_points, optimal=200)
+        score = - d_angle - d_speed - height_metric
         # score_diff = oldscore - score
         
         #backpropagate
@@ -395,6 +396,13 @@ def main():
 
             # display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
             # display_message(screen, f"Score: {round(score + distance_traveled,ndigits=2)}", WHITE, WIDTH // 2, 20)
+
+            # reset plane
+            plane.altitude = 100
+            plane.pitch_angle = -1
+            plane.speed = 65
+            score -= 500
+
 
         pygame.display.flip()
         clock.tick(tickspeed) #frame speed
