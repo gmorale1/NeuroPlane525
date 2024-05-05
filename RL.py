@@ -33,8 +33,8 @@ class Plane_rl:
         # for i in range(self.args.agent_epochs):
         for i in range(epoch):
             
-            random.shuffle(pattern_set)
-            state_action_b, target_q_values = zip(*pattern_set[:100])
+            # random.shuffle(pattern_set)
+            state_action_b, target_q_values = zip(*pattern_set)
             # state_action_b, target_q_values = zip(*pattern_set)
             state_action_b = torch.stack(state_action_b)
             target_q_values = torch.stack(target_q_values)
@@ -92,8 +92,10 @@ class Plane_rl:
         throttle, angle = self.exponential_ep_greedy(ep)
         if throttle == -1 and angle == -1:
             throttle, angle = self.net(torch.FloatTensor(state))
-
-        print("throttle: ", throttle," angle: ", angle)
+        if throttle == -1:
+            throttle, _ = self.net(torch.FloatTensor(state))
+        if angle == -1:
+            _, angle = self.net(torch.FloatTensor(state))
         return throttle, angle
     
     def generate_pattern_set(self, experiences):

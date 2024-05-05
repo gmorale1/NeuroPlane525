@@ -25,10 +25,13 @@ class DQN_agent(nn.Module):
             #4 layer network
             nn.Linear(layer_dims[0],layer_dims[1]),
             nn.ReLU(),
+            # nn.Tanh(),
             nn.Linear(layer_dims[1],layer_dims[2]),
             nn.ReLU(),
+            # nn.Tanh(),
             nn.Linear(layer_dims[2],layer_dims[3]),
-            nn.ReLU(),
+            # nn.ReLU(),
+            nn.Tanh(),
             nn.Linear(layer_dims[3],layer_dims[4]),
             nn.Sigmoid()
         )
