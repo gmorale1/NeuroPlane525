@@ -92,6 +92,8 @@ class Plane_rl:
         throttle, angle = self.exponential_ep_greedy(ep)
         if throttle == -1 and angle == -1:
             throttle, angle = self.net(torch.FloatTensor(state))
+
+        print("throttle: ", throttle," angle: ", angle)
         return throttle, angle
     
     def generate_pattern_set(self, experiences):

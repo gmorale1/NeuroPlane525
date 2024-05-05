@@ -33,7 +33,7 @@ class Airplane:
         self.speed = speed  # horizontal speed
         self.vertical_speed = 0
         self.pitch_angle = pitch_angle  # in degrees
-        self.throttle = 1
+        self.throttle = 1.0
         self.accel = accel
         self.drag_c = drag_coeff
         self.mass = mass
@@ -105,8 +105,8 @@ class Airplane:
        
         #drag to resist motion and non aerodynamic faces
         drag_c = 1.2
-        horz_drag = drag_c * self.speed * math.sin(math.radians(self.pitch_angle)) * timediff
-        vert_drag = drag_c * self.vertical_speed * math.cos(math.radians(self.pitch_angle)) * timediff
+        horz_drag = drag_c * self.speed * (math.sin(math.radians(self.pitch_angle))+0.001) * timediff
+        vert_drag = drag_c * self.vertical_speed * (math.cos(math.radians(self.pitch_angle))+0.001) * timediff
 
         #speeds
         self.speed = self.speed + ( horz_thrust - horz_drag) * timediff                                     #horizontal
@@ -182,34 +182,6 @@ def plane_vectorize(plane, environment):
         environment[1],
         environment[2]
     )
-
-
-# class NetWithoutDropout(nn.Module):
-#     def __init__(self,layer_dims):
-#         '''
-#         Builds a 4 layer deep network
-
-#         args: 
-#         layer_dims - list of nueron amounts at each layer
-
-#         '''
-#         super().__init__()
-#         self.model_stack = nn.Sequential(
-#             #4 layer network
-#             nn.Linear(layer_dims[0],layer_dims[1]),
-#             nn.ReLU(),
-#             nn.Linear(layer_dims[1],layer_dims[2]),
-#             nn.ReLU(),
-#             nn.Linear(layer_dims[2],layer_dims[3]),
-#             nn.ReLU(),
-#             nn.Linear(layer_dims[3],layer_dims[4]),
-#             nn.Sigmoid()
-#         )
-
-#     def forward(self,x):
-#         y_hat = self.model_stack(x)
-#         #layer prediction
-#         return y_hat 
     
 # # Weight initialization
 # def init_weights(m):
@@ -242,7 +214,7 @@ def main():
     mountain_points = generate_mountain_points(amps)
 
     ticks_per_meter = 60
-    ticks_per_sec = 45
+    ticks_per_sec = 20
     
     # scoring
     distance_traveled = 0
@@ -252,6 +224,7 @@ def main():
     prev_speed = 65
     prev_angle = -1
     time = 0
+    crash_message_decay = 0
 
     plane = Airplane(altitude=100, speed=prev_speed, pitch_angle=prev_angle)
     airplane_x = 50 #draw locations
@@ -274,6 +247,9 @@ def main():
     ep = 0
 
     while not game_over:
+        plane_height = plane.altitude - mountain_points[airplane_x]
+        # details = "throttle: " + str(round(plane.throttle,2)) + ", \tspeed: " + str(round(plane.speed,2)) + " m/s, \taltitude: " + str(round(plane_height,2)) + "m"
+        details = f"throttle: {round(plane.throttle, 2)}, speed: {round(plane.speed, 2)} m/s, altitude: {round(plane_height, 2)}m"
         
 
         
@@ -285,6 +261,8 @@ def main():
         #     display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
         #     clock.tick(tickspeed)
         #     continue
+
+        collision = False
 
         # Generate mountain points with smooth variation
         # points = generate_mountain_points(amps)
@@ -330,14 +308,17 @@ def main():
         #prints every 60 ticks, meaning one tick every second on a tickspeed of 60
         #can be used to measure distance
         
-        if debug or (tick !=0 and tick % 20 == 0):
+        if debug and (tick !=0 and tick % 20 == 0):
             print("elevation: ", mountain_points[airplane_x] - plane.altitude)
             print("distance travelled: ", round(distance_traveled))
             print("airplane height: ", HEIGHT + plane.altitude)
             print("airplane speed: ", plane.speed)
             print("airplane pitch: ", plane.pitch_angle)
             print("Score: ", score)
+            print(details)
+
     
+        if  (tick !=0 and tick % 20 == 0):
             # print()
             state_b, target_q_values = plane_rl.generate_pattern_set(experiences)
             combined_data = list(zip(state_b, target_q_values))
@@ -354,7 +335,8 @@ def main():
         d_speed = math.sqrt(prev_speed**2 + total_speed**2)
         d_angle = math.sqrt(prev_angle**2 + plane.pitch_angle**2)
         height_metric = optimal_height(plane.altitude,airplane_x,mountain_points, optimal=200)
-        score = - d_angle - d_speed - height_metric
+        offset = 0
+        score = - d_angle - d_speed - height_metric + offset
         # score_diff = oldscore - score
         
         #backpropagate
@@ -387,6 +369,7 @@ def main():
         pygame.draw.polygon(screen, GREEN, [(0, HEIGHT), *zip(range(WIDTH), mountain_points), (WIDTH, HEIGHT)])  
         experiences.append((airplane_vec_cur, output, score, airplane_vec_next, collision))      
 
+        crash_message_decay -= 1
         if collision: 
 
             if torch.is_tensor(score):
@@ -394,14 +377,22 @@ def main():
             if torch.is_tensor(distance_traveled):
                 distance_traveled = distance_traveled.item()
 
-            # display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
+            crash_message_decay = 60
             # display_message(screen, f"Score: {round(score + distance_traveled,ndigits=2)}", WHITE, WIDTH // 2, 20)
 
             # reset plane
             plane.altitude = 100
             plane.pitch_angle = -1
             plane.speed = 65
-            score -= 500
+            plane.vertical_speed = 0
+            score -= 1000
+
+        if crash_message_decay > 0 :
+            display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
+            # print("crash decay timer: ",crash_message_decay)
+
+
+        display_message(screen, details, WHITE, 10, 10)
 
 
         pygame.display.flip()
