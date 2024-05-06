@@ -32,7 +32,6 @@ class Airplane:
         self.altitude = altitude
         self.speed = speed  # horizontal speed
         self.vertical_speed = 0
-        self.pitch_angle = pitch_angle  # in degrees
         self.throttle = 1.0
         self.accel = accel
         self.drag_c = drag_coeff
@@ -40,8 +39,9 @@ class Airplane:
         self.gravity = 9.81  # gravitational acceleration in m/s^2
         self.lift_coefficient = lift_coeff
         self.color = color
-        self.elevator_angle = 0  # in degrees
-        self.pitch_rate = 0  # degrees per second
+        self.elevator_angle = 0  # flap angle in degrees
+        self.pitch_rate = 0  # degrees per second (rate of change)
+        self.pitch_angle = pitch_angle  # in degrees (actual angle relative to world)
 
     def draw_airplane(self, screen, x=50):
         airplane_width, airplane_height = 30, 10
@@ -61,7 +61,7 @@ class Airplane:
 
     def calculate_pitch(self, timediff):
         # Simple pitch dynamics: changing the pitch rate based on elevator angle
-        self.pitch_rate = 2 * self.elevator_angle  # coefficient determines responsiveness
+        self.pitch_rate = 1 * self.elevator_angle  # coefficient determines responsiveness
         self.pitch_angle += self.pitch_rate * timediff
         if self.pitch_angle > 360 or self.pitch_angle < -360:
             self.pitch_angle = self.pitch_angle % 360  # normalize angle for simplicity
@@ -104,9 +104,9 @@ class Airplane:
         vert_lift = 9.8 * math.cos(math.radians(self.pitch_angle)) #simple lift, when wing points flat to ground it is about as strong as gravity
        
         #drag to resist motion and non aerodynamic faces
-        drag_c = 1.2
-        horz_drag = drag_c * self.speed * (math.sin(math.radians(self.pitch_angle))+0.001) * timediff
-        vert_drag = drag_c * self.vertical_speed * (math.cos(math.radians(self.pitch_angle))+0.001) * timediff
+        drag_c = -1.2
+        horz_drag = drag_c * self.speed * (math.sin(math.radians(self.pitch_angle))+0.01) * timediff
+        vert_drag = drag_c * self.vertical_speed * (math.cos(math.radians(self.pitch_angle))+0.01) * timediff
 
         #speeds
         self.speed = self.speed + ( horz_thrust - horz_drag) * timediff                                     #horizontal
@@ -119,18 +119,19 @@ class Airplane:
 
     def controls(self, throttle, elevator_angle):
         #throttle limits
-        if(throttle > 0.5):
+        if(throttle > 1):
             throttle = 1
-        elif( throttle < 0.5):
+        elif( throttle < 0):
             throttle = 0
         self.throttle = throttle
 
         #elevator flap limits
-        if(elevator_angle > 0.5):
-            elevator_angle = 20
-        elif( elevator_angle < 0.5):
-            elevator_angle = -20
-        self.elevator_angle = elevator_angle
+        if elevator_angle <= 0:
+            self.elevator_angle = -20
+        elif elevator_angle >= 1:
+            self.elevator_angle = 20
+        else:
+            self.elevator_angle = (elevator_angle - 0.5) * 40
 
     def get_position(self):
         return self.speed, self.vertical_speed, self.altitude
@@ -160,7 +161,7 @@ def display_message(screen, text, color, x, y):
 
 def optimal_height(ap_alt, ap_x,heights,optimal = 500):
     #gives difference between optimal height and current flight height from the ground
-    avg_mt_height = sum(heights[ap_x:(ap_x+10)])/10
+    avg_mt_height = sum(heights[ap_x:(ap_x+5)])/5
     avg_ap_alt = math.fabs(ap_alt - avg_mt_height)
     return math.fabs(optimal - avg_ap_alt)
 
@@ -214,7 +215,7 @@ def main():
     mountain_points = generate_mountain_points(amps)
 
     ticks_per_meter = 60
-    ticks_per_sec = 20
+    ticks_per_sec = 30
     
     # scoring
     distance_traveled = 0
@@ -230,14 +231,14 @@ def main():
     airplane_x = 50 #draw locations
 
     environment = (
-        mountain_points[0],
-        mountain_points[1],
-        mountain_points[2]
+        mountain_points[airplane_x],
+        mountain_points[airplane_x+1],
+        mountain_points[airplane_x+2]
         )
     airplane_vec = plane_vectorize(plane,environment)
 
     #build dimensions and assign random weights
-    dims = [len(airplane_vec),51,25,15,2]
+    dims = [len(airplane_vec),78,54,20,2]
     # model = NetWithoutDropout(dims)
     # model.apply(init_weights)
 
@@ -249,7 +250,7 @@ def main():
     while not game_over:
         plane_height = plane.altitude - mountain_points[airplane_x]
         # details = "throttle: " + str(round(plane.throttle,2)) + ", \tspeed: " + str(round(plane.speed,2)) + " m/s, \taltitude: " + str(round(plane_height,2)) + "m"
-        details = f"throttle: {round(plane.throttle, 2)}, speed: {round(plane.speed, 2)} m/s, altitude: {round(plane_height, 2)}m"
+        details = f"throttle: {round(plane.throttle, 2)}, speed: {round(plane.speed, 2)} m/s, altitude: {round(-plane_height, 2)}m"
         
 
         
@@ -314,10 +315,9 @@ def main():
             print("airplane height: ", HEIGHT + plane.altitude)
             print("airplane speed: ", plane.speed)
             print("airplane pitch: ", plane.pitch_angle)
-            print("Score: ", score)
             print(details)
 
-    
+        print("Score: ", score)
         if  (tick !=0 and tick % 20 == 0):
             # print()
             state_b, target_q_values = plane_rl.generate_pattern_set(experiences)
@@ -334,9 +334,11 @@ def main():
         # score = score - math.sqrt(prev_speed**2 + total_speed**2) - math.sqrt(prev_angle**2 + plane.pitch_angle**2) + (d_dist / ticks_per_meter) + 1 - optimal_height(plane.altitude,airplane_x,mountain_points, optimal=100)
         d_speed = math.sqrt(prev_speed**2 + total_speed**2)
         d_angle = math.sqrt(prev_angle**2 + plane.pitch_angle**2)
-        height_metric = optimal_height(plane.altitude,airplane_x,mountain_points, optimal=200)
-        offset = 0
-        score = - d_angle - d_speed - height_metric + offset
+        # height_metric = optimal_height(plane.altitude,airplane_x,mountain_points, optimal=200)
+        alt_metric = abs(plane.altitude - 100)/10
+        height_metric = 0
+        offset = 40
+        score = (- (d_angle) - (d_speed/plane.accel) - alt_metric + offset)/40
         # score_diff = oldscore - score
         
         #backpropagate
@@ -367,7 +369,6 @@ def main():
         
         # Draw mountains
         pygame.draw.polygon(screen, GREEN, [(0, HEIGHT), *zip(range(WIDTH), mountain_points), (WIDTH, HEIGHT)])  
-        experiences.append((airplane_vec_cur, output, score, airplane_vec_next, collision))      
 
         crash_message_decay -= 1
         if collision: 
@@ -385,12 +386,13 @@ def main():
             plane.pitch_angle = -1
             plane.speed = 65
             plane.vertical_speed = 0
-            score -= 1000
+            score -= 100
 
         if crash_message_decay > 0 :
             display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
             # print("crash decay timer: ",crash_message_decay)
 
+        experiences.append((airplane_vec_cur, output, score, airplane_vec_next, collision))      
 
         display_message(screen, details, WHITE, 10, 10)
 

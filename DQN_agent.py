@@ -30,7 +30,7 @@ class DQN_agent(nn.Module):
             nn.Linear(layer_dims[2],layer_dims[3]),
             nn.ReLU(),
             nn.Linear(layer_dims[3],layer_dims[4]),
-            nn.Sigmoid()
+            nn.Tanh()
         )
 
     def forward(self,x):
