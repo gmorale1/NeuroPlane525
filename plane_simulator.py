@@ -2,6 +2,8 @@ import pygame
 import random
 import math
 import torch
+import matplotlib.pyplot as plt
+import pandas as pd
 import torchvision as tv
 import torchvision.transforms as transforms
 from torch.utils.data import Dataset, DataLoader
@@ -206,13 +208,16 @@ def main():
     #1 meter = 60 points
     tickspeed = 30  
     experiences = []
-
+    valuesForGraph = []
+    # Create an empty DataFrame
+    #df.
     # Initialize amplitude values for each segment
     amps = [65, 80, 20, 200, 130, 300, 40, 234, 100, 50, 78]
 
     game_over = False
     tick = 0    #tracks distances traveled in sets of 60
     mountain_points = generate_mountain_points(amps)
+    count = 0
 
     ticks_per_meter = 60
     ticks_per_sec = 30
@@ -236,7 +241,8 @@ def main():
         mountain_points[airplane_x+2]
         )
     airplane_vec = plane_vectorize(plane,environment)
-
+    valuesForGraph.append((airplane_vec[2], airplane_vec[0]))
+    print("valuesForGraph.last -> ", valuesForGraph[-1])
     #build dimensions and assign random weights
     dims = [len(airplane_vec),78,54,20,2]
     # model = NetWithoutDropout(dims)
@@ -251,9 +257,7 @@ def main():
         plane_height = plane.altitude - mountain_points[airplane_x]
         # details = "throttle: " + str(round(plane.throttle,2)) + ", \tspeed: " + str(round(plane.speed,2)) + " m/s, \taltitude: " + str(round(plane_height,2)) + "m"
         details = f"throttle: {round(plane.throttle, 2)}, speed: {round(plane.speed, 2)} m/s, altitude: {round(-plane_height, 2)}m"
-        
 
-        
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 game_over = True
@@ -278,6 +282,8 @@ def main():
             mountain_points[2]
         )
         airplane_vec_cur = plane_vectorize(plane, environment)
+        valuesForGraph.append((airplane_vec_cur[2], airplane_vec_cur[0]))
+        #print("valuesForGraph.last -> ", valuesForGraph[-1])
         #add three height points
 
         #network episode
@@ -298,7 +304,6 @@ def main():
             mountain_points[2]
         )
         airplane_vec_next = plane_vectorize(plane, environment)
-
         # experiences.append((airplane_vec_cur, outputs, score, airplane_vec_next, failed))
         # pattern_set = plane_rl.generate_pattern_set(experiences)
         
@@ -399,11 +404,13 @@ def main():
 
         pygame.display.flip()
         clock.tick(tickspeed) #frame speed
+        count += 1
+        if (count == 100):
+            break
 
-
-
-        
-
+    df = pd.DataFrame(valuesForGraph)
+    df.to_csv('output1.csv', index=False)  # Set index=False to omit writing row indices to the file
+    print("DataFrame successfully written to 'output.csv'")
     pygame.quit()
 
 if __name__ == "__main__":
