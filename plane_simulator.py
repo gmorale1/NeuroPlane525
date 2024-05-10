@@ -11,6 +11,7 @@ from torchvision import transforms, utils
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import time as Timer
 
 import numpy as np
 
@@ -67,33 +68,6 @@ class Airplane:
         self.pitch_angle += self.pitch_rate * timediff
         if self.pitch_angle > 360 or self.pitch_angle < -360:
             self.pitch_angle = self.pitch_angle % 360  # normalize angle for simplicity
-
-    def calculate_speed(self, timediff):
-        # Calculate total engine force
-        engine_force = self.accel * self.throttle
-
-        # Convert pitch angle to radians
-        pitch_radians = math.radians(self.pitch_angle)
-
-        # Decompose the total engine force into horizontal and vertical components
-        horizontal_thrust = engine_force * math.cos(pitch_radians)
-        vertical_thrust = engine_force * math.sin(pitch_radians)
-
-        # Calculate drag based on total speed (hypotenuse of horizontal and vertical speeds)
-        total_speed = math.sqrt(self.speed ** 2 + self.vertical_speed ** 2)
-        drag = self.drag_c * (total_speed ** 2)
-
-        # Calculate horizontal forces and update horizontal speed
-        horizontal_net_force = horizontal_thrust - drag * (self.speed / total_speed if total_speed else 0)
-        horizontal_acceleration = horizontal_net_force / self.mass
-        self.speed += horizontal_acceleration * timediff
-
-        # Calculate lift and net vertical forces
-        effective_lift_coefficient = self.lift_coefficient * math.cos(pitch_radians)
-        lift = effective_lift_coefficient * (total_speed ** 2)
-        net_vertical_force = lift + vertical_thrust - self.mass * self.gravity
-        vertical_acceleration = net_vertical_force / self.mass
-        self.vertical_speed += vertical_acceleration * timediff
 
     def simple_speed(self, timediff):
         '''Uses simplified forces to be more understandable'''
@@ -161,12 +135,6 @@ def display_message(screen, text, color, x, y):
     text_surface = font.render(text, True, color)
     screen.blit(text_surface, (x, y))
 
-def optimal_height(ap_alt, ap_x,heights,optimal = 500):
-    #gives difference between optimal height and current flight height from the ground
-    avg_mt_height = sum(heights[ap_x:(ap_x+5)])/5
-    avg_ap_alt = math.fabs(ap_alt - avg_mt_height)
-    return math.fabs(optimal - avg_ap_alt)
-
 def plane_vectorize(plane, environment):
     '''
     Represents the airplane state as a vector of values
@@ -185,19 +153,8 @@ def plane_vectorize(plane, environment):
         environment[1],
         environment[2]
     )
-    
-# # Weight initialization
-# def init_weights(m):
-#     '''Glorot weights'''
-#     if isinstance(m, nn.Linear):
-#         # Calculate the bounds for Glorot initialization
-#         bound = np.sqrt(6 / (m.weight.size(0) + m.weight.size(1)))
-#         # Apply Glorot initialization to the weights
-#         torch.nn.init.uniform_(m.weight, -bound, bound)
-#         # Initialize biases to zeros
-#         m.bias.data.fill_(0.00)
 
-def main():
+def main(csv_filename):
     pygame.init()
     pygame.font.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
@@ -206,11 +163,15 @@ def main():
     clock = pygame.time.Clock()
     #1 second = 60 ticks
     #1 meter = 60 points
-    tickspeed = 30  
+    tickspeed = 50000  
     experiences = []
-    valuesForGraph = []
     # Create an empty DataFrame
-    #df.
+    plot_tracker = pd.DataFrame({
+        "Altitude":[],
+        "Speed":[],
+        "Time":[]
+    })
+    start_time = Timer.time()
     # Initialize amplitude values for each segment
     amps = [65, 80, 20, 200, 130, 300, 40, 234, 100, 50, 78]
 
@@ -241,8 +202,9 @@ def main():
         mountain_points[airplane_x+2]
         )
     airplane_vec = plane_vectorize(plane,environment)
-    valuesForGraph.append((airplane_vec[2], airplane_vec[0]))
-    print("valuesForGraph.last -> ", valuesForGraph[-1])
+    # valuesForGraph.append((airplane_vec[2], airplane_vec[0]))
+    # print("valuesForGraph.last -> ", valuesForGraph[-1])
+
     #build dimensions and assign random weights
     dims = [len(airplane_vec),78,54,20,2]
     # model = NetWithoutDropout(dims)
@@ -261,18 +223,8 @@ def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 game_over = True
-
-        # if collision: 
-        #     display_message(screen, "Collision Detected!", RED, 50, HEIGHT // 2)
-        #     clock.tick(tickspeed)
-        #     continue
-
+                continue
         collision = False
-
-        # Generate mountain points with smooth variation
-        # points = generate_mountain_points(amps)
-        # mountain_points = mountain_points[1:] + [mountain_points[0]]  # Remove leftmost point
-
 
         ## Airplane
         plane.update(1/ticks_per_sec)
@@ -282,19 +234,15 @@ def main():
             mountain_points[2]
         )
         airplane_vec_cur = plane_vectorize(plane, environment)
-        valuesForGraph.append((airplane_vec_cur[2], airplane_vec_cur[0]))
-        #print("valuesForGraph.last -> ", valuesForGraph[-1])
-        #add three height points
 
-        #network episode
-        # if tick % 60 == 0:
-        #     model.train()
+        #track plane for plotting
+        plot_tracker = plot_tracker.append({
+            "Altitude": airplane_vec_cur[0],
+            "Speed": airplane_vec_cur[2],
+            "Time": Timer.time() - start_time
+        }, ignore_index=True)
 
-        
-        # output = model(torch.FloatTensor(airplane_vec))
-        # plane.controls(throttle=output[0],elevator_angle=output[1])
         output = plane_rl.get_action(ep, airplane_vec_cur)
-        # plane.controls(throttle=1,elevator_angle=-4) #need to work on this
         plane.controls(output[0],output[1])
 
         plane.update(1/ticks_per_sec)
@@ -304,8 +252,6 @@ def main():
             mountain_points[2]
         )
         airplane_vec_next = plane_vectorize(plane, environment)
-        # experiences.append((airplane_vec_cur, outputs, score, airplane_vec_next, failed))
-        # pattern_set = plane_rl.generate_pattern_set(experiences)
         
 
         d_dist = plane.speed
@@ -335,25 +281,12 @@ def main():
         # penalize change in values, 
         # priority to smooth flight, 
         # give points for staying within the optimal height
-        # oldscore = score
-        # score = score - math.sqrt(prev_speed**2 + total_speed**2) - math.sqrt(prev_angle**2 + plane.pitch_angle**2) + (d_dist / ticks_per_meter) + 1 - optimal_height(plane.altitude,airplane_x,mountain_points, optimal=100)
         d_speed = math.sqrt(prev_speed**2 + total_speed**2)
         d_angle = math.sqrt(prev_angle**2 + plane.pitch_angle**2)
-        # height_metric = optimal_height(plane.altitude,airplane_x,mountain_points, optimal=200)
         alt_metric = abs(plane.altitude - 100)/10
-        height_metric = 0
         offset = 40
         score = (- (d_angle) - (d_speed/plane.accel) - alt_metric + offset)/40
         # score_diff = oldscore - score
-        
-        #backpropagate
-        # criterion = nn.BCELoss()
-        # optimizer = optim.SGD(model.parameters(), lr=0.01)
-    
-
-
-        
-
 
         distance_traveled = distance_traveled + d_dist / ticks_per_meter
         tick = (tick + 1) % 60
@@ -402,16 +335,21 @@ def main():
         display_message(screen, details, WHITE, 10, 10)
 
 
+        #break after 100 ticks
         pygame.display.flip()
         clock.tick(tickspeed) #frame speed
         count += 1
-        if (count == 100):
+        if (count == 1000):
             break
 
-    df = pd.DataFrame(valuesForGraph)
-    df.to_csv('output1.csv', index=False)  # Set index=False to omit writing row indices to the file
-    print("DataFrame successfully written to 'output.csv'")
+    plot_tracker.to_csv(csv_filename, index=False)  # Set index=False to omit writing row indices to the file
+    print("DataFrame successfully written to ", csv_filename)
     pygame.quit()
 
+import sys
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) != 2:
+        main('test.csv')
+    else:
+        csv_filename = sys.argv[1]
+        main(csv_filename)

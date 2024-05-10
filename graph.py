@@ -1,15 +1,26 @@
 import sys
+import os
+import subprocess
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# Check if CSV file paths are provided as command-line arguments
-if len(sys.argv) < 2:
-    print("Usage: python script.py <csv_file1> <csv_file2> ...")
-    sys.exit(1)
+test_name = "trials/baseline_"
+num_tests = 10
 
-# Process each CSV file provided as an argument
-for csv_file in sys.argv[1:]:
+# Initialize lists to store data from each test
+all_data = []
+
+# Process each test
+for test_number in range(1, num_tests + 1):
     try:
+        # Construct CSV file name based on prefix and test number
+        csv_file = f"{test_name}{test_number}.csv"
+
+        # Check if CSV file already exists
+        if not os.path.exists(csv_file):
+            # Run the simulation code with the CSV name as an argument
+            subprocess.run(['python', 'plane_simulator.py', csv_file])
+
         # Read CSV file into DataFrame
         df = pd.read_csv(csv_file)
 
@@ -17,26 +28,54 @@ for csv_file in sys.argv[1:]:
         print(f"Processing {csv_file}:")
         print(df)  # Example processing, replace with your processing logic
 
-        # Plot the DataFrame
-
-        # List of column labels
-        column_labels = ['Column 1', 'Column 2']
-
-        # Set column labels
-        df.columns = column_labels
-        plt.plot(df['Column 1'], df['Column 2'])
-
-        # Add labels and title
-        plt.xlabel('X-axis')
-        plt.ylabel('Y-axis')
-        plt.title('DataFrame Plot')
-
-        # Show the plot
-        plt.grid(True)
-        plt.show()
-
-        # If you need to write processed data back to a file, you can do it here
-        # Example: df.to_csv('processed_' + csv_file, index=False)
+        # Store DataFrame data for this test
+        all_data.append(df)
 
     except Exception as e:
         print(f"Error processing {csv_file}: {e}")
+
+# Plot data from all tests on the same graph
+plt.figure(figsize=(10, 6))  # Set the figure size
+for i, df in enumerate(all_data):
+    # Calculate displacement as the cumulative sum of speed
+    displacement = df['Speed'].cumsum()
+
+    # Flip the altitude values (higher altitudes become negative)
+    altitude_flipped = -df['Altitude']
+
+    # Plot the DataFrame with flipped altitude values
+    plt.plot(displacement, altitude_flipped, label=f"Test {i+1}")
+
+# Add labels and title
+plt.xlabel('Distance')
+plt.ylabel('Altitude')
+plt.title('Altitude vs Distance')
+
+# Add legend
+plt.legend()
+
+# Save the plot as an image
+plt.grid(True)
+plt.savefig('altitude_vs_distance.png')  # Save as PNG format
+# plt.show()
+
+# Initialize a list to store the overall run time for each test
+overall_run_time_per_test = []
+
+# Process each test
+for df in all_data:
+    # Get the overall run time (last value in the "Time" column) for the current test
+    overall_run_time = df['Time'].iloc[-1]
+    
+    # Append the overall run time to the list
+    overall_run_time_per_test.append(overall_run_time)
+
+# Plot overall run time with respect to the test number
+plt.figure(figsize=(8, 6))
+plt.plot(range(1, len(all_data) + 1), overall_run_time_per_test, marker='o', linestyle='-')
+plt.xlabel('Test Number')
+plt.ylabel('Overall Run Time')
+plt.title('Overall Run Time vs Test Number')
+plt.grid(True)
+# plt.show()
+plt.savefig('process_time.png')  # Save as PNG format
