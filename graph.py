@@ -4,8 +4,8 @@ import subprocess
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# test_name = "trials/network_tweaks_"
-test_name = "trials/baseline_"
+test_name = "trials/network_tweaks_"
+# test_name = "trials/baseline_"
 
 num_tests = 10
 
@@ -41,7 +41,7 @@ plt.figure(figsize=(10, 6))  # Set the figure size
 ticks_per_sec = 30  #assumed time step based on standard from plane_simulator
 for i, df in enumerate(all_data):
     # Calculate displacement as the cumulative sum of speed
-    displacement = (df['Speed'] * ticks_per_sec).cumsum()
+    displacement = (df['Speed'] * (1/ticks_per_sec)).cumsum()
 
     # Flip the altitude values (higher altitudes become negative)
     altitude_flipped = -df['Altitude']
