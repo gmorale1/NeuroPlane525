@@ -222,8 +222,8 @@ def main(csv_filename):
     airplane_vec = plane_vectorize(plane,environment)
 
     #build dimensions and assign random weights
-    # dims = [len(airplane_vec),78,54,20,2]
-    dims = [len(airplane_vec),46,25,10,2]
+    dims = [len(airplane_vec),78,54,20,2]
+    # dims = [len(airplane_vec),46,25,10,2]
     plane_rl = Plane_rl(dims)
     ep = 0
 
