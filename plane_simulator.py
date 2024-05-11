@@ -31,7 +31,7 @@ else:
     print("GPU not available, using CPU for computations.")
 
 # Disable standard out to improve performance speed
-performance = True
+performance = False
 if performance: sys.stdout = open(os.devnull, 'w')
 
 # Define some colors

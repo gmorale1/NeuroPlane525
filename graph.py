@@ -4,8 +4,8 @@ import subprocess
 import pandas as pd
 import matplotlib.pyplot as plt
 
-test_name = "trials/network_tweaks_"
-# test_name = "trials/baseline_"
+# test_name = "trials/network_tweaks_"
+test_name = "trials/baseline_"
 
 num_tests = 10
 
