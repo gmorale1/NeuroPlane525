@@ -45,6 +45,7 @@ for i, df in enumerate(all_data):
 
     # Flip the altitude values (higher altitudes become negative)
     altitude_flipped = -df['Altitude']
+    altitude_flipped = altitude_flipped + 800
 
     # Plot the DataFrame with flipped altitude values
     plt.plot(displacement, altitude_flipped, label=f"Test {i+1}")
@@ -82,3 +83,13 @@ plt.title('Overall Run Time vs Test Number')
 plt.grid(True)
 # plt.show()
 plt.savefig(test_name+'_process_time.png')  # Save as PNG format
+
+# Calculate the total runtime and number of tests
+total_runtime = sum(overall_run_time_per_test)
+num_tests = len(overall_run_time_per_test)
+
+# Calculate the average runtime
+average_runtime = total_runtime / num_tests
+
+# Print the average runtime
+print("Average " + test_name + "Runtime:", average_runtime)
