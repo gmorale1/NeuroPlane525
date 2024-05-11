@@ -10,6 +10,15 @@ import torch.nn.functional as F
 import torch.optim as optim
 import numpy as np
 
+# Check if GPU is available
+if torch.cuda.is_available():
+    # If available, set the device to GPU
+    device = torch.device("cuda")
+    print("GPU available, using GPU for computations.")
+else:
+    # If not available, fall back to CPU
+    device = torch.device("cpu")
+    print("GPU not available, using CPU for computations.")
 
 class DQN_agent(nn.Module):
     def __init__(self,layer_dims):

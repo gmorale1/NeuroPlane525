@@ -4,7 +4,9 @@ import subprocess
 import pandas as pd
 import matplotlib.pyplot as plt
 
+# test_name = "trials/network_tweaks_"
 test_name = "trials/baseline_"
+
 num_tests = 10
 
 # Initialize lists to store data from each test
@@ -36,9 +38,10 @@ for test_number in range(1, num_tests + 1):
 
 # Plot data from all tests on the same graph
 plt.figure(figsize=(10, 6))  # Set the figure size
+ticks_per_sec = 30  #assumed time step based on standard from plane_simulator
 for i, df in enumerate(all_data):
     # Calculate displacement as the cumulative sum of speed
-    displacement = df['Speed'].cumsum()
+    displacement = (df['Speed'] * ticks_per_sec).cumsum()
 
     # Flip the altitude values (higher altitudes become negative)
     altitude_flipped = -df['Altitude']
@@ -56,7 +59,7 @@ plt.legend()
 
 # Save the plot as an image
 plt.grid(True)
-plt.savefig('altitude_vs_distance.png')  # Save as PNG format
+plt.savefig(test_name+'_altitude_vs_distance.png')  # Save as PNG format
 # plt.show()
 
 # Initialize a list to store the overall run time for each test
@@ -78,4 +81,4 @@ plt.ylabel('Overall Run Time')
 plt.title('Overall Run Time vs Test Number')
 plt.grid(True)
 # plt.show()
-plt.savefig('process_time.png')  # Save as PNG format
+plt.savefig(test_name+'_process_time.png')  # Save as PNG format

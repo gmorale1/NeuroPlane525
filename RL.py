@@ -8,13 +8,23 @@ import torch
 import torch.nn as nn
 from DQN_agent import DQN_agent
 
+# Check if GPU is available
+if torch.cuda.is_available():
+    # If available, set the device to GPU
+    device = torch.device("cuda")
+    print("GPU available, using GPU for computations.")
+else:
+    # If not available, fall back to CPU
+    device = torch.device("cpu")
+    print("GPU not available, using CPU for computations.")
+
 class Plane_rl:
     def __init__(self, dims):
         self.net = DQN_agent(dims)
         self.init = self.net.init_weights
         self.net.apply(self.init)
         # criterion = nn.BCELoss()
-        self.optimizer = optim.Adam(self.net.parameters(), lr=0.01)
+        self.optimizer = optim.Adam(self.net.parameters(), lr=0.2)
         self.target_net = copy.deepcopy(self.net)
         self.count = 0
         self.gamma = 0.95
@@ -27,7 +37,7 @@ class Plane_rl:
         # (State, action) and respective target Q-values in a batch
         # random.shuffle(pattern_set)
         # state_action_b, target_q_values = pattern_set
-        epoch = 10
+        epoch = 2
         loss_collection = np.zeros(epoch)
 
         # for i in range(self.args.agent_epochs):

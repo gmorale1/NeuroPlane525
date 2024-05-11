@@ -12,12 +12,27 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 import time as Timer
+import os
+import sys
 
 import numpy as np
 
 from DQN_agent import DQN_agent
 from RL import Plane_rl
 
+# Check if GPU is available
+if torch.cuda.is_available():
+    # If available, set the device to GPU
+    device = torch.device("cuda")
+    print("GPU available, using GPU for computations.")
+else:
+    # If not available, fall back to CPU
+    device = torch.device("cpu")
+    print("GPU not available, using CPU for computations.")
+
+# Disable standard out to improve performance speed
+performance = True
+if performance: sys.stdout = open(os.devnull, 'w')
 
 # Define some colors
 BLACK = (0, 0, 0)
@@ -163,7 +178,10 @@ def main(csv_filename):
     clock = pygame.time.Clock()
     #1 second = 60 ticks
     #1 meter = 60 points
-    tickspeed = 50000  
+    if performance:
+        tickspeed = 0  #unrestricted speed
+    else:
+        tickspeed #30 frames per second 
     experiences = []
     # Create an empty DataFrame
     plot_tracker = pd.DataFrame({
@@ -202,16 +220,10 @@ def main(csv_filename):
         mountain_points[airplane_x+2]
         )
     airplane_vec = plane_vectorize(plane,environment)
-    # valuesForGraph.append((airplane_vec[2], airplane_vec[0]))
-    # print("valuesForGraph.last -> ", valuesForGraph[-1])
 
     #build dimensions and assign random weights
-    dims = [len(airplane_vec),78,54,20,2]
-    # model = NetWithoutDropout(dims)
-    # model.apply(init_weights)
-
-    # model = DQN_agent(dims)
-    # model.apply(model.init_weights)
+    # dims = [len(airplane_vec),78,54,20,2]
+    dims = [len(airplane_vec),46,25,10,2]
     plane_rl = Plane_rl(dims)
     ep = 0
 
@@ -235,12 +247,15 @@ def main(csv_filename):
         )
         airplane_vec_cur = plane_vectorize(plane, environment)
 
-        #track plane for plotting
-        plot_tracker = plot_tracker.append({
-            "Altitude": airplane_vec_cur[0],
-            "Speed": airplane_vec_cur[2],
-            "Time": Timer.time() - start_time
-        }, ignore_index=True)
+        # Create a new DataFrame with the current airplane data
+        cur_frame = pd.DataFrame({
+            "Altitude": [airplane_vec_cur[0]],
+            "Speed": [airplane_vec_cur[2]],
+            "Time": [Timer.time() - start_time]
+        })
+
+        # Concatenate the new DataFrame with the plot_tracker DataFrame
+        plot_tracker = pd.concat([plot_tracker, cur_frame], ignore_index=True)
 
         output = plane_rl.get_action(ep, airplane_vec_cur)
         plane.controls(output[0],output[1])
@@ -335,8 +350,8 @@ def main(csv_filename):
         display_message(screen, details, WHITE, 10, 10)
 
 
-        #break after 100 ticks
-        pygame.display.flip()
+        #break after 1000 ticks
+        if not performance: pygame.display.flip()
         clock.tick(tickspeed) #frame speed
         count += 1
         if (count == 1000):
@@ -346,7 +361,6 @@ def main(csv_filename):
     print("DataFrame successfully written to ", csv_filename)
     pygame.quit()
 
-import sys
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         main('test.csv')
